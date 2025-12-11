@@ -36,9 +36,9 @@ def load_model(model_name=MODEL_NAME_DEFAULT, use_deepspeed=False, use_bfloat16=
     
     Args:
         model_name: Name of the model to load (default: "xtts_v2")
-        device: Device to load the model on ("auto", "cpu", "cuda:0", etc.)
-        use_cpu: Whether to force CPU mode instead of CUDA
-        
+        device: Device to load the model on ("cuda:0", "cuda:1", etc.)
+        use_deepspeed: Whether to use DeepSpeed for loading
+        use_bfloat16: Whether to use bfloat16 precision        
     Returns:
         Xtts: Loaded and configured model
         
@@ -46,8 +46,8 @@ def load_model(model_name=MODEL_NAME_DEFAULT, use_deepspeed=False, use_bfloat16=
         Exception: If model loading fails
     """
 
-    device = device if device is not None else "cuda:0"
-    logger.info(f"Loading model: {model_name}, DeepSpeed: {use_deepspeed}, bfloat16: {use_bfloat16}...") 
+    device = device if device is not None else "auto"
+ 
     torch.set_default_device(device)
     assert torch.cuda.is_available(), "CUDA not available."
 
@@ -78,8 +78,8 @@ def load_model(model_name=MODEL_NAME_DEFAULT, use_deepspeed=False, use_bfloat16=
         
 
         model.load_checkpoint(config, checkpoint_dir=output_model_path, use_deepspeed=use_deepspeed, use_bfloat16=use_bfloat16)
-        model.cuda()
-        logger.info("Model loaded on CUDA")
+        model.to(device)
+        logger.info(f"Model loaded on {device}")
         
         logger.info("Model loading completed successfully")
         return model

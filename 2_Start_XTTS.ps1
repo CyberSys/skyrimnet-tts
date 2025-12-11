@@ -20,7 +20,7 @@ Start XTTS in standard mode
 
 .EXAMPLE
 .\2_Start_XTTS.ps1 -device cuda:0
-Start XTTS in standard mode using specified device  
+Start XTTS in standard mode using specified device
 
 Notes:
 - If the venv python isn't found this script will try the system python in PATH.
@@ -28,7 +28,7 @@ Notes:
 #>
 
 param(
-    [switch]$device = "cuda:0",
+    [string]$device = "cuda:0",
     [switch]$deepspeed,
     [switch]$bfloat16,
     [string]$server = "0.0.0.0",

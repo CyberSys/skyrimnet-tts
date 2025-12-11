@@ -95,7 +95,7 @@ if (Test-Path $vsDevShellPath0) {
     Write-Host "Visual Studio Dev Shell script not found. Install Visual Studio Build Tools 2022 with the C++ workload!" -ForegroundColor Yellow
     Write-Host "or use the Winget command from the GitHub Release page." -ForegroundColor Yellow
 
-    Any_Key_Wait -msg "Press any key to continue without VS environment (may fail)..`n" -wait_sec 60
+    Any_Key_Wait -msg "Press any key to exit..`n" -wait_sec 60
     exit 1
 }
 Set-Location -Path "${currentDirectory}"
