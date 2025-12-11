@@ -83,17 +83,22 @@ function Any_Key_Wait {
 Clear-Host
 Show-Banner
 
+# Set up Visual Studio 2022 x64 environment
+$currentDirectory = $PWD.Path
+$vsDevShellPath0 = "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\Launch-VsDevShell.ps1"
+$vsDevShellPath1 = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\Launch-VsDevShell.ps1"
+if (Test-Path $vsDevShellPath0) {
+    & $vsDevShellPath0  -Arch amd64
+} elseif (Test-Path $vsDevShellPath1) {
+    & $vsDevShellPath1  -Arch amd64
+} else {
+    Write-Host "Visual Studio Dev Shell script not found. Install Visual Studio Build Tools 2022 with the C++ workload!" -ForegroundColor Yellow
+    Write-Host "or use the Winget command from the GitHub Release page." -ForegroundColor Yellow
 
-$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-
-cmd.exe /c "call `"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat`" && set > %temp%\vcvars.txt"
-
-
-Get-Content "$env:temp\vcvars.txt" | Foreach-Object {
-  if ($_ -match "^(.*?)=(.*)$") {
-    Set-Content "env:\$($matches[1])" $matches[2]
-  }
+    Any_Key_Wait -msg "Press any key to continue without VS environment (may fail)..`n" -wait_sec 60
+    exit 1
 }
+Set-Location -Path "${currentDirectory}"
 
 Write-Host "`nAttempting to start SkyrimNet XTTS..." -ForegroundColor Green
 
