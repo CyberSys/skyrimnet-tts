@@ -4,8 +4,34 @@ from pathlib import Path
 from PyInstaller.utils.hooks import collect_data_files
 from PyInstaller.utils.hooks import collect_submodules
 
-os.environ['CUDA_PATH'] = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.1"
-os.environ['CUDA_PATH_V12_1'] = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.1"
+INCLUDE_DEEPSPEED = os.environ.get('INCLUDE_DEEPSPEED', '0') == '1'
+if INCLUDE_DEEPSPEED:
+    print("=" * 60)
+    print("DeepSpeed/Triton support: ENABLED (requires CUDA Toolkit with nvcc)")
+    print("=" * 60)
+else:
+    print("DeepSpeed/Triton support: DISABLED (set INCLUDE_DEEPSPEED=1 to enable)")
+
+# Only set CUDA_PATH when deepspeed is enabled
+if INCLUDE_DEEPSPEED:
+    def _find_cuda():
+        for _p in [
+            "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.1",
+            "E:\\Tools\\CUDA\\12.1",
+            "E:\\Tools\\CUDA\\v12.1",
+            "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.9",
+            "E:\\Tools\\CUDA\\12.9",
+        ]:
+            if os.path.isfile(os.path.join(_p, "bin", "nvcc.exe")):
+                return _p
+        return None
+    _cuda_path = _find_cuda()
+    if _cuda_path:
+        os.environ['CUDA_PATH'] = _cuda_path
+        os.environ['CUDA_PATH_V12_1'] = _cuda_path
+        print(f"CUDA_PATH set to: {_cuda_path}")
+    else:
+        print("Warning: CUDA Toolkit not found, deepspeed may not work")
 
 
 datas = []
@@ -148,12 +174,16 @@ datas += collect_data_files("torch", excludes=[
     # because collect_data_files() doesn't reliably exclude binary dependencies
 ])
 
-datas += collect_data_files("deepspeed", excludes=[
-    "*.cpp", "*.cu", "*.c", "*.h", "*.cuh",
-    "test*", "*test*", "tests/*", "*/tests/*",
-    "example*", "*example*", "examples/*", "*/examples/*",
-    "*.md", "*.txt", "*.rst", "docs/*", "*/docs/*",
-])
+if INCLUDE_DEEPSPEED:
+    try:
+        datas += collect_data_files("deepspeed", excludes=[
+            "*.cpp", "*.cu", "*.c", "*.h", "*.cuh",
+            "test*", "*test*", "tests/*", "*/tests/*",
+            "example*", "*example*", "examples/*", "*/examples/*",
+            "*.md", "*.txt", "*.rst", "docs/*", "*/docs/*",
+        ])
+    except:
+        print("Warning: deepspeed data files not collected")
 
 datas += collect_data_files("torchaudio", excludes=[
     "*.cpp", "*.cu", "*.c", "*.h", "*.cuh",
@@ -177,37 +207,39 @@ datas += collect_data_files("transformers", excludes=[
 
 # CRITICAL: Include Triton backend data files (driver.py and other backend modules)
 # Exclude AMD backend entirely - we only need NVIDIA CUDA backend
-datas += collect_data_files("triton", excludes=[
-    "test*", "*test*", "tests/*", "*/tests/*",
-    "example*", "*example*", "examples/*", "*/examples/*",
-    "*.md", "*.txt", "*.rst", "docs/*", "*/docs/*",
-    "backends/amd/*",  # Exclude AMD backend
-    "backends/amd"
-])
+if INCLUDE_DEEPSPEED:
+    try:
+        datas += collect_data_files("triton", excludes=[
+            "test*", "*test*", "tests/*", "*/tests/*",
+            "example*", "*example*", "examples/*", "*/examples/*",
+            "*.md", "*.txt", "*.rst", "docs/*", "*/docs/*",
+            "backends/amd/*",
+            "backends/amd"
+        ])
+    except:
+        print("Warning: triton data files not collected")
 
 # CRITICAL: Include Python development headers for Triton JIT compilation
-import sys
-import sysconfig
-from pathlib import Path
+if INCLUDE_DEEPSPEED:
+    import sys
+    import sysconfig
+    from pathlib import Path
 
-# Get Python installation paths
-python_base = Path(sys.base_prefix)
-python_include = Path(sysconfig.get_path('include'))
-python_stdlib = Path(sysconfig.get_path('stdlib'))
+    python_base = Path(sys.base_prefix)
+    python_include = Path(sysconfig.get_path('include'))
+    python_stdlib = Path(sysconfig.get_path('stdlib'))
 
-# Include Python headers (Python.h and related files)
-if python_include.exists():
-    for header_file in python_include.rglob('*.h'):
-        rel_path = header_file.relative_to(python_include)
-        datas.append((str(header_file), f'include/{rel_path.parent}'))
-    print(f"Added Python headers from: {python_include}")
+    if python_include.exists():
+        for header_file in python_include.rglob('*.h'):
+            rel_path = header_file.relative_to(python_include)
+            datas.append((str(header_file), f'include/{rel_path.parent}'))
+        print(f"Added Python headers from: {python_include}")
 
-# Include Python libs directory (python3X.lib for linking)
-python_libs = python_base / 'libs'
-if python_libs.exists():
-    for lib_file in python_libs.glob('*.lib'):
-        datas.append((str(lib_file), 'libs'))
-    print(f"Added Python libs from: {python_libs}")
+    python_libs = python_base / 'libs'
+    if python_libs.exists():
+        for lib_file in python_libs.glob('*.lib'):
+            datas.append((str(lib_file), 'libs'))
+        print(f"Added Python libs from: {python_libs}")
 
 # Include essential distutils files (needed for compilation)
 try:
@@ -265,7 +297,11 @@ hiddenimports += [
 # Essential PyTorch modules only
 hiddenimports += collect_submodules('torch.nn.functional')
 
-hiddenimports += collect_submodules('deepspeed')
+if INCLUDE_DEEPSPEED:
+    try:
+        hiddenimports += collect_submodules('deepspeed')
+    except:
+        print("Warning: deepspeed submodules not collected")
 
 # Fix torch._dynamo import issues (keep minimal)
 hiddenimports += collect_submodules('torch._dynamo.polyfills')
@@ -317,14 +353,27 @@ if "ja" in MODEL_SUPPORTED_LANGS+SPACY_REQUIRED_LANGS:
 # Fix specific import errors (minimal set)
 hiddenimports += [
     'torch._dynamo.polyfills.fx',
-    "triton",
-    "triton.compiler",
-    "triton.tools",
-    "triton.language",
-    "triton.backends.nvidia",
-    "triton.backends.nvidia.driver",
-    'deepspeed',
 ]
+
+if INCLUDE_DEEPSPEED:
+    try:
+        import triton
+        hiddenimports += [
+            "triton",
+            "triton.compiler",
+            "triton.tools",
+            "triton.language",
+            "triton.backends.nvidia",
+            "triton.backends.nvidia.driver",
+        ]
+    except:
+        print("Warning: triton not available, skipping triton hidden imports")
+
+    try:
+        import deepspeed
+        hiddenimports += ['deepspeed']
+    except:
+        print("Warning: deepspeed not available, skipping deepspeed hidden imports")
 
 # CRITICAL: Include compilation modules for Triton JIT
 hiddenimports += [
@@ -433,7 +482,6 @@ a = Analysis(
         'skyrimnet-xtts.COQUI_AI_TTS.vocoder.layers': 'py+pyz',
         'gradio': 'py+pyz',
         'torch': 'py+pyz',
-        'deepspeed': 'py+pyz',
     },
     cipher=None,
     upx=True,

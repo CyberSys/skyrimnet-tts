@@ -1,18 +1,16 @@
 --extra-index-url=https://download.pytorch.org/whl/cu121
-torch==2.1.1
-torchaudio
+torch==2.5.1
+torchaudio==2.5.1
 nvidia-ml-py
-# Windows deepspeed build
-#triton-windows<3.1 ; sys_platform == 'win32'
-https://github.com/woct0rdho/triton-windows/releases/download/v3.0.0-windows.post3/triton-3.0.0-cp310-cp310-win_amd64.whl ; sys_platform == 'win32'
-#https://github.com/langfod/DeepSpeed/releases/download/v0.18.0w/deepspeed-0.18.0+361a4043-cp312-cp312-win_amd64.whl ; sys_platform == 'win32'
-https://github.com/daswer123/resemble-enhance-windows/releases/download/deepspeed/deepspeed-0.11.2+cuda121-cp310-cp310-win_amd64.whl ; sys_platform == 'win32'
+triton-windows<3.4 ; sys_platform == 'win32'
+# DeepSpeed — устанавливается отдельно скриптом сборки при наличии CUDA Toolkit
+# https://github.com/langfod/DeepSpeed/releases/download/v0.18.0w/deepspeed-0.18.0+361a4043-cp312-cp312-win_amd64.whl ; sys_platform == 'win32'
 triton<3.4 ; sys_platform != 'win32'
-deepspeed ; sys_platform != 'win32'
+# deepspeed ; sys_platform != 'win32'
 
 setuptools<81
 cupy-cuda12x
-pytorch-pfn-extras                # Optional: CuPy-PyTorch memory pool integration
+pytorch-pfn-extras
 
 psutil
 
@@ -24,36 +22,25 @@ pydantic
 loguru
 uvicorn
 transformers<4.54
-hf-xet
 gradio==5.49.1
 
 
-## Section added for TTS inclusion project.
-# Text processing libraries for various languages
-pypinyin           # Chinese pinyin conversion
-ko-speech-tools[g2p]>=0.1.0  # Korean text processing (unified package)
+pypinyin
+ko-speech-tools[g2p]>=0.1.0
+fugashi
+unidic-lite
+cutlet
+soundfile
+scipy
 
-fugashi            # Japanese tokenizer
-unidic-lite        # Japanese dictionary for fugashi
-cutlet             # Japanese text segmentation
-soundfile          # Audio file I/O
-scipy              # Scientific computing (signal processing)
+coqpit
+fsspec
+tqdm
+typeguard
 
-coqpit             # Configuration management
-fsspec             # File system abstraction
-tqdm               # Progress bars
-typeguard          # Runtime type checking
+num2words
+einops
 
-num2words          # Number to words conversion (used by TTS text cleaners)
-einops             # Tensor operations and manipulation
-
-# Multilingual text processing replacement
-spacy-pkuseg       # Chinese text segmentation alternative
-kss                # Korean sentence segmentation
-g2pk2              # Korean grapheme-to-phoneme conversion alternative
-
-# For testing 
-#requests
-#pyinstaller
-#wheel
-#vulture
+spacy-pkuseg
+kss
+g2pk2
