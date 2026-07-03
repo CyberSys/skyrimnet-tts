@@ -147,6 +147,15 @@ if ($foundCuda) {
 Write-Host "[BUILD] INCLUDE_DEEPSPEED = $($env:INCLUDE_DEEPSPEED)" -ForegroundColor Gray
 
 # ============================================================================
+# Strip CUDA from PATH to avoid DLL version conflicts during build
+# (torch bundles its own CUDA 12.1 DLLs, but system CUDA 12.9 in PATH
+#  causes cufft/cublas version mismatch at import time)
+# ============================================================================
+$originalPath = $env:PATH
+$env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notmatch '\\\\CUDA\\\\' }) -join ';'
+Write-Host "[BUILD] Stripped CUDA paths from PATH to avoid DLL conflicts" -ForegroundColor Gray
+
+# ============================================================================
 # Build Process
 # ============================================================================
 if (-not $nobuild) {
@@ -193,6 +202,8 @@ if (-not $nobuild) {
         Get-ChildItem -Path "skyrimnet-xtts" -Recurse -Directory | Where-Object { $_.Name -eq "__pycache__" } | Remove-Item -Recurse -Force
         & pyinstaller --clean --noconfirm --log-level=INFO "skyrimnet-xtts_smol.spec"
     }
+
+    $env:PATH = $originalPath
 
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[ERROR] PyInstaller build failed with code $LASTEXITCODE" -ForegroundColor Red

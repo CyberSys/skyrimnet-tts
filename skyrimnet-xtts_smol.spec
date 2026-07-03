@@ -68,34 +68,35 @@ datas += collect_data_files("groovy")
 datas += collect_data_files("safehttpx")
 
 # CRITICAL: Include comprehensive spaCy data files
-import os
-import spacy
+# Note: spacy import triggers torch DLL loading which conflicts with PyInstaller's
+# win32ctypes. We wrap in try/except and use subprocess to find the path if needed.
+MODEL_SUPPORTED_LANGS = ["en", "es", "fr", "de", "it", "pt", "pl", "tr", "ru", "nl", "cs", "ar", "zh-cn", "hu", "ko", "ja"]
+SPACY_REQUIRED_LANGS = ['ar','en','es','hi','ja','zh','ko','vi','th']
 
-MODEL_SUPPORTED_LANGS = ["en", "es", "fr", "de", "it", "pt", "pl", "tr", "ru", "nl", "cs", "ar", "zh-cn", "hu", "ko", "ja"] # Supported languages from XTTS v2 model config.json
-SPACY_REQUIRED_LANGS = ['ar','en','es','hi','ja','zh','ko','vi','th'] 
+required_langs = SPACY_REQUIRED_LANGS
+required_langs = [lang.split("-")[0] for lang in required_langs]
+required_langs = list(set(required_langs))
 
-required_langs = SPACY_REQUIRED_LANGS #MODEL_SUPPORTED_LANGS + SPACY_REQUIRED_LANGS
-required_langs = [lang.split("-")[0] for lang in required_langs]  # Normalize to primary language codes
-required_langs = list(set(required_langs))  # Remove duplicates
-spacy_lang_path = os.path.join(os.path.dirname(spacy.__file__), 'lang')
+try:
+    import os
+    import spacy
+    spacy_lang_path = os.path.join(os.path.dirname(spacy.__file__), 'lang')
 
-for lang_code in required_langs:
-    lang_dir = os.path.join(spacy_lang_path, lang_code)
-    if os.path.exists(lang_dir):
-        #print(f"Found language directory: {lang_dir}")
-        
-        for root, dirs, files in os.walk(lang_dir):
-            for file in files:
-                if file.endswith('.py'):
-                    src_path = os.path.join(root, file)
-
-                    rel_path = os.path.relpath(src_path, spacy_lang_path)
-                    dest_path = f"spacy/lang/{rel_path.replace(os.sep, '/')}"
-                    datas.append((src_path, os.path.dirname(dest_path)))
-                    #print(f"  Added: {src_path} -> {dest_path}")
-    else:
-        print(f"Warning: Language directory not found: {lang_dir}")
-        pass
+    for lang_code in required_langs:
+        lang_dir = os.path.join(spacy_lang_path, lang_code)
+        if os.path.exists(lang_dir):
+            for root, dirs, files in os.walk(lang_dir):
+                for file in files:
+                    if file.endswith('.py'):
+                        src_path = os.path.join(root, file)
+                        rel_path = os.path.relpath(src_path, spacy_lang_path)
+                        dest_path = f"spacy/lang/{rel_path.replace(os.sep, '/')}"
+                        datas.append((src_path, os.path.dirname(dest_path)))
+        else:
+            print(f"Warning: Language directory not found: {lang_dir}")
+except Exception as e:
+    print(f"Warning: Could not collect spacy language files: {e}")
+    print("Language support may be limited. Proceeding with build anyway.")
 
 try:
     core_spacy_data = collect_data_files("spacy", excludes=["*.pyc", "__pycache__"])
@@ -395,10 +396,7 @@ hiddenimports += [
 
 excludedimports = [
     'ninja',
-    #'torch.utils.cpp_extension',
-    # Exclude AMD backend (we only use NVIDIA CUDA)
     'triton.backends.amd',
-    # Exclude unsupported language modules for spaCy (based on XTTS v2 supported languages)
     # Supported by TTS: en, es, fr, de, it, pt, pl, tr, ru, nl, cs, ar, zh-cn, hu, ko, ja, hi
     # CRITICAL: Do NOT exclude languages that TTS actually uses: en, es, ar, hi, ja, zh
     # Exclude all others:
@@ -446,16 +444,16 @@ excludedimports = [
     'spacy.lang.sv',   # Swedish
     'spacy.lang.ta',   # Tamil
     'spacy.lang.te',   # Telugu
-    #'spacy.lang.th',   # Thai
     'spacy.lang.ti',   # Tigrinya
     'spacy.lang.tl',   # Tagalog
     'spacy.lang.tn',   # Tswana
     'spacy.lang.tt',   # Tatar
     'spacy.lang.uk',   # Ukrainian
     'spacy.lang.ur',   # Urdu
-    #'spacy.lang.vi',   # Vietnamese
     'spacy.lang.yo',   # Yoruba
 ]
+if not INCLUDE_DEEPSPEED:
+    excludedimports.append('triton')
 
 # =============================================================================
 # ANALYSIS (Keep original configuration mostly)
@@ -495,29 +493,9 @@ a = Analysis(
 # DLLs are available in: %CUDA_PATH%\bin\
 
 cuda_dlls_to_exclude = [
-    # ULTRA-CONSERVATIVE APPROACH: Only exclude the absolutely safe CUDA runtime DLL
-    # Testing shows shm.dll loading issues - reducing exclusions to minimal set
-    
-    # CUDA Runtime (available in system CUDA installation)
-    'cudart64_12.dll',                          # 0.6 MB - CUDA Runtime - SAFE TO EXCLUDE
-    
-    # Temporarily removing other exclusions to debug shm.dll loading issue
-    # Will re-add after confirming application starts correctly
-    
-    # NOTE: Keep these PyTorch-required DLLs that were previously excluded:
-    'cublas64_12.dll', # (97.8 MB) - Required by torch_cuda.dll
-    'cublaslt64_12.dll', # (638 MB) - Required by torch_cuda.dll
-    'cufft64_11.dll', # (274 MB) - Required by torch_cuda.dll
-    'cufftw64_11.dll', # (0.2 MB) - FFTW Interface
-    'curand64_10.dll', # (75.5 MB) - Random Number Generation
-    'cusolver64_11.dll', # (270 MB) - Required by torch_cuda.dll
-    'cusparse64_12.dll', # (455.4 MB) - Required by torch_cuda.dll
-    'nvrtc64_120_0.dll', # (85.7 MB) - Runtime Compilation
-    # - cudnn64_9.dll (0.3 MB) - Required by torch_cuda.dll
-    # - cudnn_cnn64_9.dll (4.4 MB) - Core CNN operations
-    # - cudnn_ops64_9.dll (120.6 MB) - Core operations
-    # - cudnn_engines_runtime_compiled64_9.dll (19.3 MB) - Runtime engines
-    # - cudnn_graph64_9.dll (2.3 MB) - Graph operations
+    # SMOL BUILD: Do NOT exclude any CUDA DLLs.
+    # Torch 2.5.1+cu121 ships with CUDA 12.1 DLLs. System CUDA 12.9 is incompatible.
+    # All CUDA DLLs must be bundled to avoid version mismatch at runtime.
 ]
 
 # Additional post-processing to remove bloat and CUDA system libraries
